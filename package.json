@@ -1,0 +1,25 @@
+{
+  "name": "sendero_interaction_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alarrosa14/senderoInteractionServer.git"
+  },
+  "author": "Sendero",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alarrosa14/senderoInteractionServer/issues"
+  },
+  "homepage": "https://github.com/alarrosa14/senderoInteractionServer#readme",
+  "dependencies": {
+    "amqplib": "^0.4.1",
+    "nodemon": "^1.9.1",
+    "socket.io": "^1.4.5",
+    "underscore": "^1.8.3"
+  }
+}
