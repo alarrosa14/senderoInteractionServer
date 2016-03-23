@@ -16,7 +16,15 @@ function bail(err) {
 // Publisher
 function publisher(ch, clientId, queue_name, data) {
   ch.assertQueue(queue_name);
-  ch.sendToQueue(queue_name, new Buffer(data));
+  ch.sendToQueue(
+    queue_name, 
+    new Buffer(data), 
+    __(config.rabbit.publish_options).extend({
+      headers: {
+        web_client_id: clientId
+      }
+    })
+  );
 }
 
 queue.connect('amqp://' + config.rabbit.address)
@@ -44,13 +52,12 @@ queue.connect('amqp://' + config.rabbit.address)
 
 
       io.on('connection', function(client){
-        console.log('A user connected...');
+        console.log('User connected: ', client.id);
         conn.createChannel()
           .then(
             function(ch) {
               client.channel = ch;
               client.on('interaction', function(data){
-                console.log(client.id);
                 if (data !== undefined)
                   if (data.name !== undefined && config.interactions[data.name] !== undefined)
                     if (config.interactions[data.name].queues !== undefined)
