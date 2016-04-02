@@ -14,16 +14,17 @@ function bail(err) {
 }
 
 // Publisher
-function publisher(ch, clientId, queue_name, data) {
+function publisher(ch, clientId, queue_name, data, custom_options, callback) {
   ch.assertQueue(queue_name);
   ch.sendToQueue(
     queue_name, 
     new Buffer(data), 
-    __(config.rabbit.publish_options).extend({
-      headers: {
-        web_client_id: clientId
-      }
-    })
+    __(config.rabbit.publish_options)
+      .extend(custom_options ? custom_options : {}, {
+        headers: {
+          web_client_id: clientId
+        }
+      })
   );
 }
 
@@ -39,6 +40,8 @@ queue.connect('amqp://' + config.rabbit.address)
           function(ch) {
             channel = ch;
             var promises = [];
+            promises.push(ch.assertQueue("control_queue"));
+            console.log(" -> control_queue ... created");
             __(config.rabbit.queues).each(function(q){
               console.log(" -> " + q + " ... created");
               promises.push(ch.assertQueue(q));
@@ -73,12 +76,29 @@ queue.connect('amqp://' + config.rabbit.address)
         client.on('disconnect', function() {
           console.log('Got disconnected!');
           if (client.channel) {
-            console.log("Closing channel for disconnected client");
             client.channel.close();
-          }
+            conn.createConfirmChannel().then(function(ch) {
+
+              ch.assertQueue("control_queue");
+              ch.sendToQueue(
+                "control_queue", 
+                new Buffer("disconnected"), 
+                __(config.rabbit.publish_options).extend({
+                  headers: {
+                    web_client_id: client.id
+                  }
+                }),
+                function(err, ok) {
+                  if (err !== null)
+                    console.warn('Message nacked!');
+                  else
+                    console.log('Message acked');
+                  console.log("Closing channel for disconnected client");
+                  ch.close();
+                });
+              });
+          };
         });
-
-
       });
   });
 
