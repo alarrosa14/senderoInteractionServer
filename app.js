@@ -13,7 +13,7 @@ function bail(err) {
   process.exit(1);
 }
 
-// Publisher
+// Publisher helper function
 function publisher(ch, clientId, queue_name, data, custom_options, callback) {
   ch.assertQueue(queue_name);
   ch.sendToQueue(
@@ -24,7 +24,12 @@ function publisher(ch, clientId, queue_name, data, custom_options, callback) {
         headers: {
           web_client_id: clientId
         }
-      })
+      }),
+    callback ? callback : function(err, ok) {
+      if (err) {
+        console.warn("Warning! %s message nacked %s", data, err);
+      }
+    } 
   );
 }
 
@@ -35,7 +40,7 @@ queue.connect('amqp://' + config.rabbit.address)
       // Create/Assert the queues
       console.log("Creating queues:");
       var channel;
-      conn.createChannel()
+      conn.createConfirmChannel()
         .then(
           function(ch) {
             channel = ch;
@@ -50,60 +55,35 @@ queue.connect('amqp://' + config.rabbit.address)
           })
         .then(
           function(){
-            channel.close();
-          });
-
-
-      io.on('connection', function(client){
-        console.log('User connected: ', client.id);
-        conn.createChannel()
-          .then(
-            function(ch) {
-              client.channel = ch;
+            io.on('connection', function(client){
+              console.log('User connected: ', client.id);
+              
+              /* Interaction event */
               client.on('interaction', function(data){
                 if (data !== undefined)
                   if (data.name !== undefined && config.interactions[data.name] !== undefined)
                     if (config.interactions[data.name].queues !== undefined)
                       __(config.interactions[data.name].queues).each(function(q) {
                           if (__(config.rabbit.queues).contains(q))
-                            publisher(ch, client.id, q, data.data ? data.data : "");
+                            publisher(channel, client.id, q, data.data ? data.data : "");
                           else 
-                            console.warn("WARNING: " + q + " is not defined in config.rabbit.queues");
+                            console.warn("WARNING: %s is not defined in config.rabbit.queues", q);
                         });
               });
-            });
 
-        client.on('disconnect', function() {
-          console.log('Got disconnected!');
-          if (client.channel) {
-            client.channel.close();
-            conn.createConfirmChannel().then(function(ch) {
-
-              ch.assertQueue("control_queue");
-              ch.sendToQueue(
-                "control_queue", 
-                new Buffer("disconnected"), 
-                __(config.rabbit.publish_options).extend({
-                  headers: {
-                    web_client_id: client.id
-                  }
-                }),
-                function(err, ok) {
-                  if (err !== null)
-                    console.warn('Message nacked!');
-                  else
-                    console.log('Message acked');
-                  console.log("Closing channel for disconnected client");
-                  ch.close();
-                });
+              /* Client disconnected event */
+              client.on('disconnect', function() {
+                console.log('User disconnected: %s', client.id);
+                publisher(channel, client.id, "control_queue", "disconnected");
               });
-          };
-        });
-      });
-  });
+
+
+            });
+          });
+    });
 
 app.listen(config.web.port, function() {
   console.log("*********************************************************");
-  console.log("*** Sendero Interaction Server listening on port " + config.web.port + " ***");
+  console.log("*** Sendero Interaction Server listening on port %s ***", config.web.port);
   console.log("*********************************************************");
 });
