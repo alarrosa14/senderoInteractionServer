@@ -14,16 +14,17 @@ function bail(err) {
 }
 
 // Publisher helper function
-function publisher(ch, clientId, queue_name, data, custom_options, callback) {
+function publisher(ch, clientId, queue_name, data, type, other_options, callback) {
   ch.assertQueue(queue_name);
   ch.sendToQueue(
     queue_name, 
     new Buffer(data), 
     __(config.rabbit.publish_options)
-      .extend(custom_options ? custom_options : {}, {
+      .extend(other_options ? other_options : {}, {
         headers: {
           web_client_id: clientId
-        }
+        },
+        type: type
       }),
     callback ? callback : function(err, ok) {
       if (err) {
@@ -45,8 +46,6 @@ queue.connect('amqp://' + config.rabbit.address)
           function(ch) {
             channel = ch;
             var promises = [];
-            promises.push(ch.assertQueue("control_queue"));
-            console.log(" -> control_queue ... created");
             __(config.rabbit.queues).each(function(q){
               console.log(" -> " + q + " ... created");
               promises.push(ch.assertQueue(q));
@@ -65,7 +64,7 @@ queue.connect('amqp://' + config.rabbit.address)
                     if (config.interactions[data.name].queues !== undefined)
                       __(config.interactions[data.name].queues).each(function(q) {
                           if (__(config.rabbit.queues).contains(q))
-                            publisher(channel, client.id, q, data.data ? data.data : "");
+                            publisher(channel, client.id, q, data.data ? data.data : "", "interaction_data");
                           else 
                             console.warn("WARNING: %s is not defined in config.rabbit.queues", q);
                         });
@@ -74,7 +73,9 @@ queue.connect('amqp://' + config.rabbit.address)
               /* Client disconnected event */
               client.on('disconnect', function() {
                 console.log('User disconnected: %s', client.id);
-                publisher(channel, client.id, "control_queue", "disconnected");
+                __(config.rabbit.queues).each(function(q){
+                  publisher(channel, client.id, q, "", "client_disconnected");
+                });
               });
 
 
